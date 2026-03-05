@@ -206,6 +206,17 @@ note This is a comment and will not run.
 
 ---
 
+## Updating the Extension
+
+1. Replace `fsn.py` in the extension folder with the new version
+2. Bump the `version` field in `package.json` (e.g. `"1.0.0"` → `"1.1.0"`)
+3. Run `vsce package` to build a new `.vsix`
+4. In VS Code: `Ctrl+Shift+P` → **"Extensions: Install from VSIX..."** → select the new file
+5. Reload VS Code when prompted
+
+The old version is automatically replaced.
+
+---
 
 ## Known Limitations
 

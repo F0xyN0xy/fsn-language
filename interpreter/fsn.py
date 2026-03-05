@@ -1,3 +1,12 @@
+#!/usr/bin/env python3
+"""
+FSN - Freeform Sentence Notation  v2.0
+A programming language where code reads like natural English.
+File extension: .fsn
+
+New in v2: math, strings, file I/O, GUI windows, date/time, random numbers
+"""
+
 import sys
 import re
 import os
@@ -152,6 +161,9 @@ class ShowWindowStmt(Node):
 class SetLabelStmt(Node):
     def __init__(self, varname, text, line): self.varname=varname; self.text=text; self.line=line
 
+class OpenCalculatorStmt(Node):
+    def __init__(self, line): self.line=line
+
 # ─────────────────────────────────────────────
 #  PARSER
 # ─────────────────────────────────────────────
@@ -226,6 +238,7 @@ class Parser:
         elif kw == "write":   return self.parse_write_file()
         elif kw == "append":  return self.parse_append_file()
         elif kw == "open":    return self.parse_open_window()
+        elif kw == "launch":  return self.parse_launch()
         elif kw == "show":    return self.parse_show()
         elif kw == "display": return self.parse_display_window()
         else:
@@ -405,6 +418,12 @@ class Parser:
             self.consume(); msg = self.parse_expr(); self.expect_period()
             return ShowPopupStmt(msg, line)
         raise ParseError("After 'show' I expected 'window' or 'popup'.", line)
+
+    def parse_launch(self):
+        line = self.current_line(); self.consume()
+        self.expect_word("calculator")
+        self.expect_period()
+        return OpenCalculatorStmt(line)
 
     def parse_display_window(self):
         line = self.current_line(); self.consume()
@@ -898,6 +917,9 @@ class Interpreter:
         elif isinstance(node, SetLabelStmt):
             self._gui_set_label(node.varname, str(self.eval(node.text, env)), node.line)
 
+        elif isinstance(node, OpenCalculatorStmt):
+            self._launch_calculator(node.line)
+
     def call_function(self, name, arg_exprs, env, line):
         args = [self.eval(a, env) for a in arg_exprs]
         result, handled = _fsn_builtin(name, args, line)
@@ -1052,6 +1074,289 @@ class Interpreter:
     def _gui_show(self, line):
         self._require_gui(line)
         self._gui_root.mainloop()
+
+
+    def _launch_calculator(self, line):
+        try:
+            import tkinter as tk
+            import math as _math
+        except ImportError:
+            raise RuntimeError_("Tkinter is not available on this system.", line)
+
+        root = tk.Tk()
+        root.title("FSN Calculator")
+        root.resizable(False, False)
+        root.configure(bg="#1e1e2e")
+
+        # ── Colour palette ─────────────────────
+        BG        = "#1e1e2e"
+        DISP_BG   = "#13131f"
+        DISP_FG   = "#cdd6f4"
+        BTN_NUM   = "#313244"
+        BTN_OP    = "#45475a"
+        BTN_ACTION= "#fab387"   # orange  (=, AC, etc.)
+        BTN_SCI   = "#89b4fa"   # blue    (sin, cos, …)
+        BTN_MEM   = "#a6e3a1"   # green   (memory)
+        BTN_FG    = "#cdd6f4"
+        BTN_HOV   = "#585b70"
+        ACCENT    = "#fab387"
+
+        # ── State ──────────────────────────────
+        state = {
+            "expr":       "",    # full expression string
+            "display":    "0",   # what's shown on screen
+            "just_equal": False, # did we just hit =?
+            "memory":     0,     # M register
+            "mode":       "basic",  # "basic" or "sci"
+            "error":      False,
+        }
+
+        # ── Display ────────────────────────────
+        disp_var   = tk.StringVar(value="0")
+        expr_var   = tk.StringVar(value="")
+
+        disp_frame = tk.Frame(root, bg=DISP_BG, padx=16, pady=10)
+        disp_frame.pack(fill=tk.X, padx=0, pady=0)
+
+        expr_lbl = tk.Label(disp_frame, textvariable=expr_var,
+                            bg=DISP_BG, fg="#585b70",
+                            font=("Consolas", 11), anchor="e")
+        expr_lbl.pack(fill=tk.X)
+
+        disp_lbl = tk.Label(disp_frame, textvariable=disp_var,
+                            bg=DISP_BG, fg=DISP_FG,
+                            font=("Consolas", 32, "bold"), anchor="e")
+        disp_lbl.pack(fill=tk.X)
+
+        btn_container = tk.Frame(root, bg=BG)
+        btn_container.pack(fill=tk.BOTH, expand=True, padx=6, pady=6)
+
+        # ── Helpers ────────────────────────────
+        def update_display(val, expr=""):
+            disp_var.set(val)
+            expr_var.set(expr)
+
+        def safe_eval(expr_str):
+            """Safely evaluate the expression string."""
+            allowed = set("0123456789+-*/.()% eE")
+            clean = expr_str.replace("×","*").replace("÷","/").replace("^","**")
+            # replace math words
+            for fn in ["sin","cos","tan","log","sqrt","abs","pi","e"]:
+                if fn in clean:
+                    clean = clean.replace(fn, f"_math.{fn}" if fn not in ("pi","e") else f"_math.{fn}")
+            try:
+                result = eval(clean, {"__builtins__": {}, "_math": _math})
+                return result
+            except:
+                return None
+
+        def press(val):
+            s = state
+            if s["error"]:
+                s["expr"] = ""; s["display"] = "0"; s["error"] = False
+
+            if val == "AC":
+                s["expr"] = ""; s["display"] = "0"; s["just_equal"] = False
+                update_display("0", "")
+                return
+
+            if val == "⌫":
+                if s["display"] not in ("0","Error"):
+                    s["display"] = s["display"][:-1] or "0"
+                    if not s["just_equal"]:
+                        s["expr"] = s["expr"][:-1]
+                update_display(s["display"], s["expr"])
+                return
+
+            if val == "=":
+                full = s["expr"]
+                if not full:
+                    return
+                expr_var.set(full + " =")
+                result = safe_eval(full)
+                if result is None:
+                    s["display"] = "Error"; s["error"] = True
+                    update_display("Error", full + " =")
+                else:
+                    # clean up float
+                    if isinstance(result, float) and result == int(result):
+                        result = int(result)
+                    s["display"] = str(result)
+                    s["expr"]    = str(result)
+                    update_display(str(result), full + " =")
+                s["just_equal"] = True
+                return
+
+            if val == "+/-":
+                if s["display"] not in ("0","Error"):
+                    if s["display"].startswith("-"):
+                        s["display"] = s["display"][1:]
+                    else:
+                        s["display"] = "-" + s["display"]
+                    # patch expression
+                    if s["expr"] and s["just_equal"]:
+                        s["expr"] = s["display"]
+                update_display(s["display"], s["expr"])
+                return
+
+            if val == "%":
+                result = safe_eval(s["expr"])
+                if result is not None:
+                    r = result / 100
+                    s["display"] = str(int(r) if isinstance(r, float) and r == int(r) else r)
+                    s["expr"] = s["display"]
+                    update_display(s["display"], s["expr"])
+                return
+
+            # Memory operations
+            if val == "MC":
+                state["memory"] = 0; return
+            if val == "MR":
+                m = str(int(state["memory"]) if isinstance(state["memory"], float) and state["memory"] == int(state["memory"]) else state["memory"])
+                if s["just_equal"] or s["display"] == "0":
+                    s["expr"] = m
+                else:
+                    s["expr"] += m
+                s["display"] = m; s["just_equal"] = False
+                update_display(s["display"], s["expr"])
+                return
+            if val == "M+":
+                result = safe_eval(s["expr"])
+                if result is not None: state["memory"] += result
+                return
+            if val == "M-":
+                result = safe_eval(s["expr"])
+                if result is not None: state["memory"] -= result
+                return
+
+            # Scientific functions — wrap current expression
+            sci_funcs = {
+                "sin": "sin(", "cos": "cos(", "tan": "tan(",
+                "sin⁻¹": "asin(", "cos⁻¹": "acos(", "tan⁻¹": "atan(",
+                "log": "log10(", "ln": "log(", "√": "sqrt(",
+                "x²": "**2", "x³": "**3", "xⁿ": "**",
+                "π": "pi", "e": "e",
+                "10ˣ": "10**", "eˣ": "e**",
+            }
+            if val in sci_funcs:
+                token = sci_funcs[val]
+                if s["just_equal"] or s["display"] == "0":
+                    s["expr"] = token
+                else:
+                    s["expr"] += token
+                s["display"] = token.rstrip("(")
+                s["just_equal"] = False
+                update_display(s["display"], s["expr"])
+                return
+
+            # Numbers and operators
+            is_op = val in ("+", "-", "×", "÷", "^", "(", ")")
+            is_dot = val == "."
+
+            if s["just_equal"] and not is_op:
+                s["expr"] = ""; s["just_equal"] = False
+
+            if is_dot:
+                if "." not in s["display"]:
+                    s["display"] += "."
+                    s["expr"]    += "."
+            elif is_op:
+                op_map = {"×": "*", "÷": "/", "^": "**"}
+                s["expr"]    += op_map.get(val, val)
+                s["display"]  = val
+                s["just_equal"] = False
+            else:
+                if s["display"] == "0" and val != ".":
+                    s["display"] = val
+                    s["expr"]    = (s["expr"][:-1] if s["expr"] and s["expr"][-1] == "0" and len(s["expr"]) == 1 else s["expr"] + val) if s["expr"] and s["expr"][-1] not in "0123456789." else s["expr"][:-1] + val if s["expr"] else val
+                else:
+                    s["display"] += val
+                    s["expr"]    += val
+                s["just_equal"] = False
+
+            update_display(s["display"], s["expr"])
+
+        # ── Button factory ─────────────────────
+        all_btns = {}
+
+        def make_btn(parent, text, color, row, col, rowspan=1, colspan=1, wide=False):
+            is_action = color == BTN_ACTION
+            def on_enter(e): btn.config(bg=ACCENT if is_action else BTN_HOV)
+            def on_leave(e): btn.config(bg=color)
+            btn = tk.Button(parent, text=text,
+                            bg=color, fg=BTN_FG if not is_action else "#1e1e2e",
+                            font=("Consolas", 13, "bold" if is_action else "normal"),
+                            relief="flat", bd=0, cursor="hand2",
+                            activebackground=BTN_HOV,
+                            command=lambda t=text: press(t))
+            btn.grid(row=row, column=col, rowspan=rowspan, columnspan=colspan,
+                     padx=3, pady=3, sticky="nsew",
+                     ipadx=0, ipady=10)
+            btn.bind("<Enter>", on_enter)
+            btn.bind("<Leave>", on_leave)
+            all_btns[text] = btn
+            return btn
+
+        # ── Basic panel ────────────────────────
+        basic_frame = tk.Frame(btn_container, bg=BG)
+        basic_frame.pack(side=tk.LEFT, fill=tk.BOTH)
+
+        basic_layout = [
+            # row 0
+            [("AC", BTN_ACTION), ("+/-", BTN_OP), ("%", BTN_OP), ("÷", BTN_ACTION)],
+            # row 1
+            [("7", BTN_NUM),  ("8", BTN_NUM),  ("9", BTN_NUM),  ("×", BTN_ACTION)],
+            # row 2
+            [("4", BTN_NUM),  ("5", BTN_NUM),  ("6", BTN_NUM),  ("-", BTN_ACTION)],
+            # row 3
+            [("1", BTN_NUM),  ("2", BTN_NUM),  ("3", BTN_NUM),  ("+", BTN_ACTION)],
+            # row 4
+            [("0", BTN_NUM),  (".", BTN_NUM),  ("⌫", BTN_OP),   ("=", BTN_ACTION)],
+        ]
+
+        for r, row in enumerate(basic_layout):
+            basic_frame.rowconfigure(r, weight=1)
+            for c, (txt, col) in enumerate(row):
+                basic_frame.columnconfigure(c, weight=1)
+                make_btn(basic_frame, txt, col, r, c)
+
+        # ── Scientific panel ───────────────────
+        sci_frame = tk.Frame(btn_container, bg=BG)
+        sci_frame.pack(side=tk.LEFT, fill=tk.BOTH, padx=(4, 0))
+
+        sci_layout = [
+            [("MC", BTN_MEM),   ("MR", BTN_MEM),  ("M+", BTN_MEM),  ("M-", BTN_MEM)],
+            [("sin", BTN_SCI),  ("cos", BTN_SCI), ("tan", BTN_SCI), ("π",  BTN_SCI)],
+            [("sin⁻¹",BTN_SCI),("cos⁻¹",BTN_SCI),("tan⁻¹",BTN_SCI),("e",  BTN_SCI)],
+            [("log", BTN_SCI),  ("ln",  BTN_SCI), ("√",   BTN_SCI), ("(",  BTN_OP)],
+            [("x²", BTN_SCI),   ("x³",  BTN_SCI), ("xⁿ",  BTN_SCI), (")",  BTN_OP)],
+        ]
+
+        for r, row in enumerate(sci_layout):
+            sci_frame.rowconfigure(r, weight=1)
+            for c, (txt, col) in enumerate(row):
+                sci_frame.columnconfigure(c, weight=1)
+                make_btn(sci_frame, txt, col, r, c)
+
+        # ── Keyboard support ───────────────────
+        key_map = {
+            "Return": "=", "KP_Enter": "=",
+            "BackSpace": "⌫", "Delete": "AC", "Escape": "AC",
+            "plus": "+", "minus": "-", "asterisk": "×",
+            "slash": "÷", "percent": "%", "period": ".",
+            "parenleft": "(", "parenright": ")",
+        }
+        for d in "0123456789":
+            key_map[d] = d
+            key_map[f"KP_{d}"] = d
+
+        def on_key(event):
+            k = event.keysym
+            if k in key_map:
+                press(key_map[k])
+
+        root.bind("<Key>", on_key)
+        root.mainloop()
 
 
 # ─────────────────────────────────────────────
