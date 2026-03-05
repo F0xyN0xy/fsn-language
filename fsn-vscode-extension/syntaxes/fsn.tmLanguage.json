@@ -1,0 +1,106 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "FSN",
+  "scopeName": "source.fsn",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#number" },
+    { "include": "#boolean" },
+    { "include": "#keyword-control" },
+    { "include": "#keyword-declaration" },
+    { "include": "#keyword-io" },
+    { "include": "#keyword-function" },
+    { "include": "#keyword-list" },
+    { "include": "#keyword-math" },
+    { "include": "#keyword-string" },
+    { "include": "#keyword-file" },
+    { "include": "#keyword-gui" },
+    { "include": "#keyword-datetime" },
+    { "include": "#keyword-random" },
+    { "include": "#keyword-operator" },
+    { "include": "#keyword-comparison" },
+    { "include": "#punctuation" },
+    { "include": "#identifier" }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.fsn",
+      "match": "\\bnote\\b.*$"
+    },
+    "string": {
+      "name": "string.quoted.double.fsn",
+      "begin": "\"", "end": "\"", "patterns": []
+    },
+    "number": {
+      "name": "constant.numeric.fsn",
+      "match": "\\b\\d+(\\.\\d+)?\\b"
+    },
+    "boolean": {
+      "name": "constant.language.boolean.fsn",
+      "match": "\\b(true|false)\\b"
+    },
+    "keyword-control": {
+      "name": "keyword.control.fsn",
+      "match": "\\b(if|then|otherwise|end\\s+if|repeat|times|end\\s+repeat|keep\\s+doing\\s+while|end\\s+keep|for\\s+each|in|end\\s+for)\\b"
+    },
+    "keyword-declaration": {
+      "name": "keyword.other.declaration.fsn",
+      "match": "\\b(let|be|set|to|define|with|end\\s+define|give\\s+back)\\b"
+    },
+    "keyword-io": {
+      "name": "support.function.fsn",
+      "match": "\\b(say|ask|and\\s+store\\s+it\\s+in)\\b"
+    },
+    "keyword-function": {
+      "name": "entity.name.function.fsn",
+      "match": "\\b(call|run|the\\s+result\\s+of)\\b"
+    },
+    "keyword-list": {
+      "name": "keyword.other.list.fsn",
+      "match": "\\b(a\\s+list\\s+of|add|remove|from|the\\s+size\\s+of)\\b"
+    },
+    "keyword-math": {
+      "name": "support.function.math.fsn",
+      "match": "\\b(the\\s+square\\s+root\\s+of|the\\s+absolute\\s+value\\s+of|to\\s+the\\s+power\\s+of|round|to\\s+\\d+\\s+decimal\\s+places|the\\s+floor\\s+of|the\\s+ceiling\\s+of|the\\s+minimum\\s+of|the\\s+maximum\\s+of)\\b"
+    },
+    "keyword-string": {
+      "name": "support.function.string.fsn",
+      "match": "\\b(uppercase\\s+of|lowercase\\s+of|trimmed|length\\s+of|reverse\\s+of|number\\s+from|text\\s+from|contains|starts\\s+with|ends\\s+with)\\b"
+    },
+    "keyword-file": {
+      "name": "support.function.file.fsn",
+      "match": "\\b(write|append|to\\s+file|contents\\s+of\\s+file)\\b"
+    },
+    "keyword-gui": {
+      "name": "support.function.gui.fsn",
+      "match": "\\b(open\\s+window\\s+titled|add\\s+label|add\\s+button|that\\s+calls|add\\s+input\\s+as|add\\s+image|show\\s+window|show\\s+popup|display\\s+window|set\\s+label|as)\\b"
+    },
+    "keyword-datetime": {
+      "name": "support.function.datetime.fsn",
+      "match": "\\b(today|now|the\\s+current\\s+year|the\\s+current\\s+month|the\\s+current\\s+day|the\\s+current\\s+hour|the\\s+current\\s+minute)\\b"
+    },
+    "keyword-random": {
+      "name": "support.function.random.fsn",
+      "match": "\\b(a\\s+random\\s+number\\s+between|a\\s+random\\s+decimal\\s+between|a\\s+random\\s+choice\\s+from)\\b"
+    },
+    "keyword-operator": {
+      "name": "keyword.operator.arithmetic.fsn",
+      "match": "\\b(plus|minus|times|divided\\s+by|modulo)\\b"
+    },
+    "keyword-comparison": {
+      "name": "keyword.operator.comparison.fsn",
+      "match": "\\b(is\\s+greater\\s+than\\s+or\\s+equal\\s+to|is\\s+less\\s+than\\s+or\\s+equal\\s+to|is\\s+greater\\s+than|is\\s+less\\s+than|is\\s+not|is|and|or|not)\\b"
+    },
+    "punctuation": {
+      "patterns": [
+        { "name": "punctuation.terminator.statement.fsn", "match": "\\." },
+        { "name": "punctuation.separator.comma.fsn", "match": "," }
+      ]
+    },
+    "identifier": {
+      "name": "variable.other.fsn",
+      "match": "[a-zA-Z_][a-zA-Z0-9_ ]*"
+    }
+  }
+}

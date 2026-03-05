@@ -1,0 +1,61 @@
+note ── Math ──────────────────────────────────────────
+let x be 81.
+say "Square root of 81:", the square root of x.
+say "Absolute value of -42:", the absolute value of -42.
+say "2 to the power of 10:", 2 to the power of 10.
+say "Round 3.7:", round 3.7.
+say "Round 3.14159 to 2 decimal places:", round 3.14159 to 2 decimal places.
+say "Floor of 4.9:", the floor of 4.9.
+say "Ceiling of 4.1:", the ceiling of 4.1.
+say "Min of 5 and 12:", the minimum of 5 and 12.
+say "Max of 5 and 12:", the maximum of 5 and 12.
+
+note ── Strings ────────────────────────────────────────
+let greeting be "  Hello, World!  ".
+say "Uppercase:", uppercase of greeting.
+say "Lowercase:", lowercase of greeting.
+say "Trimmed:", trimmed greeting.
+say "Length:", length of "Hello".
+say "Reverse:", reverse of "FSN".
+
+note ── String conditions ─────────────────────────────
+let msg be "Hello, World.".
+if msg contains "World" then
+  say "Contains World: true".
+end if.
+if msg starts with "Hello" then
+  say "Starts with Hello: true".
+end if.
+if msg ends with "World." then
+  say "Ends with World.: true".
+end if.
+
+note ── Type conversion ───────────────────────────────
+let num be number from "42".
+let txt be text from 99.
+say "Number from text:", num.
+say "Text from number:", txt.
+
+note ── String concatenation with plus ───────────────
+let first be "Freeform".
+let second be " Sentence Notation".
+say "Joined:", first plus second.
+
+note ── Random ────────────────────────────────────────
+let dice be a random number between 1 and 6.
+say "Dice roll:", dice.
+let coin be a random choice from a list of "heads", "tails".
+say "Coin flip:", coin.
+
+note ── Date and time ─────────────────────────────────
+say "Today:", today.
+say "Year:", the current year.
+say "Month:", the current month.
+
+note ── File I/O ──────────────────────────────────────
+write "Hello from FSN!" to file "test_output.txt".
+append "Second line." to file "test_output.txt".
+let contents be contents of file "test_output.txt".
+say "File contents:", contents.
+
+say "All tests passed."

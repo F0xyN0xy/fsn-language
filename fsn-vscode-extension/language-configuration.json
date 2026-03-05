@@ -1,0 +1,23 @@
+{
+  "comments": {
+    "lineComment": "note"
+  },
+  "brackets": [],
+  "autoClosingPairs": [
+    { "open": "\"", "close": "\"" }
+  ],
+  "surroundingPairs": [
+    { "open": "\"", "close": "\"" }
+  ],
+  "wordPattern": "[a-zA-Z_][a-zA-Z0-9_]*",
+  "indentationRules": {
+    "increaseIndentPattern": "^(if .* then|repeat .* times|keep doing while .*|for each .* in .*|define .*)\\s*$",
+    "decreaseIndentPattern": "^\\s*(otherwise|end if|end repeat|end keep|end for|end define)\\b"
+  },
+  "onEnterRules": [
+    {
+      "beforeText": "^(if .* then|repeat .* times|keep doing while .*|for each .* in .*|define .*)\\s*$",
+      "action": { "indent": "indent" }
+    }
+  ]
+}

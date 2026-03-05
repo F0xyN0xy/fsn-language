@@ -1,0 +1,20 @@
+note A simple program in FSN.
+
+let name be "Alice".
+let age be 20.
+
+if age is greater than or equal to 18 then
+  say "Welcome,", name.
+otherwise
+  say "Sorry,", name, "you must be 18 or older.".
+end if.
+
+define countdown with n
+  keep doing while n is greater than 0
+    say n.
+    set n to n minus 1.
+  end keep.
+  say "Blast off.".
+end define.
+
+call countdown with 3.

@@ -1,0 +1,94 @@
+note ─────────────────────────────────────
+note  Sample 1: Hello World & Variables
+note ─────────────────────────────────────
+
+let name be "World".
+say "Hello,", name.
+
+let score be 95.
+let bonus be 5.
+let total be score plus bonus.
+say "Total score:", total.
+
+
+note ─────────────────────────────────────
+note  Sample 2: Conditionals
+note ─────────────────────────────────────
+
+let age be 20.
+
+if age is greater than or equal to 18 then
+  say "You are an adult.".
+otherwise
+  say "You are a minor.".
+end if.
+
+let weather be "sunny".
+
+if weather is "sunny" then
+  say "Wear sunscreen.".
+otherwise
+  say "Bring a jacket.".
+end if.
+
+
+note ─────────────────────────────────────
+note  Sample 3: Loops
+note ─────────────────────────────────────
+
+note Count up with repeat
+repeat 3 times
+  say "Tick.".
+end repeat.
+
+note Count down with keep doing
+let count be 5.
+keep doing while count is greater than 0
+  say count.
+  set count to count minus 1.
+end keep.
+say "Blast off.".
+
+
+note ─────────────────────────────────────
+note  Sample 4: Lists
+note ─────────────────────────────────────
+
+let groceries be a list of "apples", "bananas", "milk".
+add "eggs" to groceries.
+remove "bananas" from groceries.
+say the size of groceries.
+
+for each item in groceries
+  say item.
+end for.
+
+
+note ─────────────────────────────────────
+note  Sample 5: Functions
+note ─────────────────────────────────────
+
+define greet with person
+  say "Hello,", person.
+end define.
+
+call greet with "Alice".
+call greet with "Bob".
+
+define add two numbers with a, b
+  give back a plus b.
+end define.
+
+let result be the result of add two numbers with 10, 32.
+say "10 + 32 =", result.
+
+define factorial with n
+  if n is less than or equal to 1 then
+    give back 1.
+  end if.
+  let smaller be the result of factorial with n minus 1.
+  give back n times smaller.
+end define.
+
+let fact5 be the result of factorial with 5.
+say "5! =", fact5.
