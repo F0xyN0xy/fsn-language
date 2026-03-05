@@ -8,7 +8,7 @@
   "license": "CC-BY-NC-4.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/f0xyn0xy/fsn"
+    "url": "https://github.com/f0xyn0xy/fsn-language"
   },
   "engines": {
     "vscode": "^1.75.0"
