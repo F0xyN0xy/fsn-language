@@ -1,6 +1,6 @@
 const vscode = require('vscode');
-const path = require('path');
-const fs = require('fs');
+const path   = require('path');
+const fs     = require('fs');
 
 function activate(context) {
 
@@ -17,9 +17,9 @@ function activate(context) {
       doc.save();
     }
 
-    const filePath = doc.fileName;
-    const config = vscode.workspace.getConfiguration('fsn');
-    const pythonPath = config.get('pythonPath') || 'python3';
+    const filePath    = doc.fileName;
+    const config      = vscode.workspace.getConfiguration('fsn');
+    const pythonPath  = config.get('pythonPath') || 'python3';
 
     // Resolve interpreter: user setting → bundled fsn.py next to extension
     let interpPath = config.get('interpreterPath') || '';
@@ -46,9 +46,9 @@ function activate(context) {
 
   // ── Open REPL ─────────────────────────────────────────
   const replCmd = vscode.commands.registerCommand('fsn.openRepl', () => {
-    const config = vscode.workspace.getConfiguration('fsn');
+    const config     = vscode.workspace.getConfiguration('fsn');
     const pythonPath = config.get('pythonPath') || 'python3';
-    let interpPath = config.get('interpreterPath') || '';
+    let interpPath   = config.get('interpreterPath') || '';
     if (!interpPath) {
       interpPath = path.join(context.extensionPath, 'fsn.py');
     }
@@ -68,7 +68,7 @@ function activate(context) {
   // ── Status bar item ───────────────────────────────────
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   statusBar.command = 'fsn.runFile';
-  statusBar.text = '$(play) Run FSN';
+  statusBar.text    = '$(play) Run FSN';
   statusBar.tooltip = 'Run this .fsn file (Ctrl+F5)';
 
   const updateStatusBar = () => {
@@ -86,6 +86,6 @@ function activate(context) {
   context.subscriptions.push(runCmd, replCmd, statusBar);
 }
 
-function deactivate() { }
+function deactivate() {}
 
 module.exports = { activate, deactivate };

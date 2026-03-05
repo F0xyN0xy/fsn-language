@@ -36,6 +36,36 @@ fsn-language/
 
 ---
 
+## 🔌 Installing the VS Code Extension
+
+### Option A: Install as VSIX (Recommended)
+
+1. Install the VS Code Extension CLI:
+   ```
+   npm install -g @vscode/vsce
+   ```
+
+2. Package the extension:
+   ```
+   cd fsn-vscode-extension
+   vsce package
+   ```
+   This creates `fsn-language-1.0.0.vsix`.
+
+3. Install in VS Code:
+   - Open VS Code
+   - Press `Ctrl+Shift+P` → "Extensions: Install from VSIX..."
+   - Select the `.vsix` file
+
+### Option B: Load as Development Extension
+
+1. Copy the `fsn-vscode-extension` folder to:
+   - **Windows**: `%USERPROFILE%\.vscode\extensions\fsn-language`
+   - **macOS/Linux**: `~/.vscode/extensions/fsn-language`
+
+2. Restart VS Code.
+
+---
 
 ## ⚙️ VS Code Settings
 

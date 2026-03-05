@@ -1,0 +1,121 @@
+note ── Control: wait, stop loop, skip, counted repeat ──────────
+note wait 0.1 seconds.
+
+let count be 0.
+repeat with i from 1 to 5
+  change count by 1.
+end repeat.
+say "Counted loop 1-5, count:", count.
+
+let total be 0.
+repeat with i from 2 to 10 by 2
+  change total by i.
+end repeat.
+say "Sum of even 2-10:", total.
+
+let stopped be 0.
+repeat 10 times
+  change stopped by 1.
+  if stopped is 3 then
+    stop loop.
+  end if.
+end repeat.
+say "Stopped at:", stopped.
+
+let skipped be 0.
+repeat with i from 1 to 5
+  if i is 3 then
+    skip to next.
+  end if.
+  change skipped by 1.
+end repeat.
+say "Skipped item 3, count:", skipped.
+
+note ── Change by ────────────────────────────────────────────────
+let score be 100.
+change score by 50.
+change score by -25.
+say "Score after changes:", score.
+
+note ── List operations ──────────────────────────────────────────
+let fruits be a list of "apple", "banana", "cherry".
+insert "mango" into fruits at 2.
+say "After insert at 2:", item 2 of fruits.
+
+replace item 1 in fruits with "avocado".
+say "After replace item 1:", item 1 of fruits.
+
+delete item 3 from fruits.
+say "Size after delete:", the size of fruits.
+
+sort fruits.
+say "First after sort:", first item of fruits.
+say "Last after sort:", last item of fruits.
+
+let nums be a list of 3, 1, 4, 1, 5, 9, 2.
+sort nums.
+say "Sorted nums first:", item 1 of nums.
+say "Sorted nums last:", last item of nums.
+
+sort nums in reverse.
+say "Reverse sorted first:", item 1 of nums.
+
+shuffle nums.
+say "Shuffled (size):", the size of nums.
+
+say "Position of 9 in nums:", position of 9 in nums.
+
+note ── String extras ────────────────────────────────────────────
+let msg be "Hello World FSN".
+say "Word count:", words in msg.
+say "Repeat text:", repeat text "ha" times 3.
+
+note ── Item and letter (Scratch style) ─────────────────────────
+let greeting be "Hello".
+say "Letter 1 of Hello:", letter 1 of greeting.
+say "Letter 5 of Hello:", letter 5 of greeting.
+
+note ── Type checks ──────────────────────────────────────────────
+let num be 42.
+let txt be "hello".
+let lst be a list of 1, 2, 3.
+say "Type of 42:", type of num.
+say "Type of hello:", type of txt.
+say "Type of list:", type of lst.
+
+note ── Math: trig and more ──────────────────────────────────────
+say "sin 30:", sine of 30.
+say "cos 60:", cosine of 60.
+say "log 100:", log of 100.
+say "pi:", pi.
+
+note ── Try / error handling ─────────────────────────────────────
+try
+  let x be number from "not a number".
+if error store it in err
+  say "Caught error:", err.
+end try.
+
+note ── File system ──────────────────────────────────────────────
+create folder "test_fsn_dir".
+say "Folder exists:", folder exists "test_fsn_dir".
+write "test content" to file "test_fsn_dir/hello.txt".
+say "File exists:", file exists "test_fsn_dir/hello.txt".
+let filelist be files in "test_fsn_dir".
+say "Files in folder:", the size of filelist.
+delete folder "test_fsn_dir".
+say "Folder gone:", folder exists "test_fsn_dir".
+
+note ── JSON ─────────────────────────────────────────────────────
+let data be a list of "alpha", "beta", "gamma".
+save data as json to file "test_data.json".
+let loaded be json from file "test_data.json".
+say "JSON round-trip first item:", item 1 of loaded.
+delete file "test_data.json".
+
+note ── Time ─────────────────────────────────────────────────────
+say "Current second:", the current second.
+let elapsed be time since start.
+say "Time elapsed (should be tiny):", elapsed.
+
+say "All v3 tests passed."
