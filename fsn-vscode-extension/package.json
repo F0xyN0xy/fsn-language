@@ -18,9 +18,6 @@
     "Snippets"
   ],
   "keywords": ["fsn", "english", "natural language", "plain english"],
-  "activationEvents": [
-    "onLanguage:fsn"
-  ],
   "main": "./extension.js",
   "contributes": {
     "languages": [
