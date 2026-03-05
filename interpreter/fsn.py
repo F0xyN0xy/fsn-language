@@ -1,14 +1,3 @@
-#!/usr/bin/env python3
-"""
-FSN - Freeform Sentence Notation  v3.0
-A programming language where code reads like natural English.
-File extension: .fsn
-
-v3 adds: Scratch-style control, list ops, string ops, OS/file system,
-         JSON, networking, clipboard, turtle graphics, sound, try/catch,
-         timers, type checking, math trig, and more.
-"""
-
 import sys, re, os, math, random, datetime, time as _time
 
 # ─────────────────────────────────────────────────────────────────────
