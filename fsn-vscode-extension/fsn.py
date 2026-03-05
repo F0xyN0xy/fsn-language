@@ -161,7 +161,10 @@ class SetLabelStmt(Node):
     def __init__(self,v,t,l): self.varname=v;self.text=t;self.line=l
 class OpenCalculatorStmt(Node):
     def __init__(self,l): self.line=l
-
+class OpenQuizBuilderStmt(Node):
+    def __init__(self,l): self.line=l
+class OpenQuizPlayerStmt(Node):
+    def __init__(self,p,l): self.path=p; self.line=l
 # Turtle / Motion
 class TurtleStmt(Node):      # generic turtle command
     def __init__(self,cmd,args,l): self.cmd=cmd;self.args=args;self.line=l
@@ -573,8 +576,22 @@ class Parser:
 
     def parse_launch(self):
         line=self.current_line(); self.consume()
-        self.expect_word("calculator"); self.expect_period()
-        return OpenCalculatorStmt(line)
+        if self.peek_words("calculator"):
+            self.consume(); self.expect_period()
+            return OpenCalculatorStmt(line)
+        if self.peek_words("quiz","builder"):
+            self.consume(); self.consume(); self.expect_period()
+            return OpenQuizBuilderStmt(line)
+        if self.peek_words("quiz"):
+            self.consume()
+            # optional: launch quiz "myquiz.json".
+            if self.peek() and self.peek().type == "STRING":
+                path = Literal(self.consume().value)
+            else:
+                path = Literal("")
+            self.expect_period()
+            return OpenQuizPlayerStmt(path, line)
+        raise ParseError("After 'launch' I expected 'calculator', 'quiz builder', or 'quiz'.", line)
 
     # ── Turtle / Motion ──────────────────────────────────────────────
 
@@ -1418,6 +1435,11 @@ class Interpreter:
             self._gui_set_label(node.varname,str(self.eval(node.text,env)),node.line)
         elif isinstance(node,OpenCalculatorStmt):
             self._launch_calculator(node.line)
+        elif isinstance(node,OpenQuizBuilderStmt):
+            self._launch_quiz_builder(node.line)
+        elif isinstance(node,OpenQuizPlayerStmt):
+            path = self.eval(node.path, env) if not isinstance(node.path, Literal) else node.path.value
+            self._launch_quiz_player(str(path), node.line)
 
         # Turtle
         elif isinstance(node,TurtleStmt):
@@ -1771,6 +1793,582 @@ class Interpreter:
             "plus":"+","minus":"-","asterisk":"×","slash":"÷","percent":"%","period":".","parenleft":"(","parenright":")"}
         for d in "0123456789": km[d]=d; km[f"KP_{d}"]=d
         root.bind("<Key>",lambda e: press(km[e.keysym]) if e.keysym in km else None)
+        root.mainloop()
+
+        root.bind("<Key>",lambda e: press(km[e.keysym]) if e.keysym in km else None)
+        root.mainloop()
+
+    # ── Quiz Builder ─────────────────────────────────────────────────
+
+    def _launch_quiz_builder(self, line):
+        try:
+            import tkinter as tk
+            from tkinter import ttk, filedialog, messagebox
+            import json
+        except ImportError:
+            raise RuntimeError_("Tkinter is not available.", line)
+
+        # ── Palette ──────────────────────────────────────────────
+        BG       = "#1a1a2e"
+        CARD     = "#16213e"
+        ACCENT   = "#e94560"
+        ACCENT2  = "#0f3460"
+        SUCCESS  = "#4caf50"
+        WARNING  = "#ff9800"
+        TEXT     = "#eaeaea"
+        SUBTEXT  = "#a0a0b0"
+        ENTRY_BG = "#0d1b2a"
+        BTN_FONT = ("Segoe UI", 11, "bold")
+        LBL_FONT = ("Segoe UI", 11)
+        HDR_FONT = ("Segoe UI", 18, "bold")
+
+        # ── State ────────────────────────────────────────────────
+        questions = []   # list of dicts
+        current_edit = [None]  # index being edited, or None
+
+        root = tk.Tk()
+        root.title("FSN Quiz Builder")
+        root.geometry("960x680")
+        root.configure(bg=BG)
+        root.minsize(800, 580)
+
+        # ── Helpers ──────────────────────────────────────────────
+        def make_btn(parent, text, cmd, color=ACCENT, fg=TEXT, width=None):
+            cfg = dict(text=text, command=cmd, bg=color, fg=fg,
+                       font=BTN_FONT, relief="flat", cursor="hand2",
+                       padx=14, pady=8, activebackground=color, activeforeground=fg,
+                       bd=0)
+            if width: cfg["width"] = width
+            b = tk.Button(parent, **cfg)
+            def oe(e, b=b, c=color): b.config(bg=_darken(c))
+            def ol(e, b=b, c=color): b.config(bg=c)
+            b.bind("<Enter>", oe); b.bind("<Leave>", ol)
+            return b
+
+        def _darken(hex_color):
+            r = int(hex_color[1:3],16); g = int(hex_color[3:5],16); b2 = int(hex_color[5:7],16)
+            r = max(0,r-30); g = max(0,g-30); b2 = max(0,b2-30)
+            return f"#{r:02x}{g:02x}{b2:02x}"
+
+        def make_entry(parent, width=40, show=None):
+            e = tk.Entry(parent, bg=ENTRY_BG, fg=TEXT, insertbackground=TEXT,
+                         font=LBL_FONT, relief="flat", bd=6, width=width)
+            if show: e.config(show=show)
+            return e
+
+        def make_label(parent, text, font=None, fg=None, bg=None, anchor="w"):
+            return tk.Label(parent, text=text,
+                            font=font or LBL_FONT, fg=fg or TEXT,
+                            bg=bg or BG, anchor=anchor)
+
+        # ── Layout: left panel (question list) + right panel (editor) ──
+        left = tk.Frame(root, bg=CARD, width=280)
+        left.pack(side=tk.LEFT, fill=tk.Y, padx=(10,0), pady=10)
+        left.pack_propagate(False)
+
+        right = tk.Frame(root, bg=BG)
+        right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # ── Left: quiz meta + question list ──────────────────────
+        tk.Label(left, text="📝  Quiz Builder", font=("Segoe UI",14,"bold"),
+                 bg=CARD, fg=ACCENT).pack(pady=(16,4), padx=12, anchor="w")
+
+        meta_frame = tk.Frame(left, bg=CARD)
+        meta_frame.pack(fill=tk.X, padx=12, pady=4)
+        tk.Label(meta_frame, text="Quiz Title:", font=("Segoe UI",10), bg=CARD, fg=SUBTEXT).pack(anchor="w")
+        title_var = tk.StringVar(value="My Quiz")
+        title_entry = tk.Entry(meta_frame, textvariable=title_var, bg=ENTRY_BG, fg=TEXT,
+                               font=("Segoe UI",11), relief="flat", bd=4)
+        title_entry.pack(fill=tk.X, pady=(2,8))
+
+        tk.Label(left, text="Questions", font=("Segoe UI",10,"bold"),
+                 bg=CARD, fg=SUBTEXT).pack(anchor="w", padx=12)
+
+        list_frame = tk.Frame(left, bg=CARD)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=4)
+
+        scrollbar = tk.Scrollbar(list_frame, bg=CARD, troughcolor=CARD)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        q_listbox = tk.Listbox(list_frame, bg=ENTRY_BG, fg=TEXT,
+                               font=("Segoe UI",10), relief="flat", bd=0,
+                               selectbackground=ACCENT, selectforeground=TEXT,
+                               activestyle="none", yscrollcommand=scrollbar.set)
+        q_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=q_listbox.yview)
+
+        btn_row = tk.Frame(left, bg=CARD)
+        btn_row.pack(fill=tk.X, padx=8, pady=(4,8))
+        make_btn(btn_row, "+ New", lambda: new_question(), ACCENT).pack(side=tk.LEFT, padx=2)
+        make_btn(btn_row, "🗑 Delete", lambda: delete_question(), "#c0392b").pack(side=tk.LEFT, padx=2)
+
+        save_load_row = tk.Frame(left, bg=CARD)
+        save_load_row.pack(fill=tk.X, padx=8, pady=(0,12))
+        make_btn(save_load_row, "💾 Save", lambda: save_quiz(), SUCCESS).pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
+        make_btn(save_load_row, "📂 Load", lambda: load_quiz(), ACCENT2).pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
+
+        # ── Right: question editor ────────────────────────────────
+        tk.Label(right, text="Question Editor", font=HDR_FONT,
+                 bg=BG, fg=TEXT).pack(anchor="w", pady=(0,12))
+
+        editor = tk.Frame(right, bg=BG)
+        editor.pack(fill=tk.BOTH, expand=True)
+
+        # Question type
+        type_row = tk.Frame(editor, bg=BG)
+        type_row.pack(fill=tk.X, pady=(0,8))
+        tk.Label(type_row, text="Type:", font=LBL_FONT, bg=BG, fg=SUBTEXT).pack(side=tk.LEFT, padx=(0,8))
+        q_type = tk.StringVar(value="multiple")
+        for val, label in [("multiple","Multiple Choice (A-D)"), ("truefalse","True / False")]:
+            tk.Radiobutton(type_row, text=label, variable=q_type, value=val,
+                           bg=BG, fg=TEXT, selectcolor=ACCENT2, activebackground=BG,
+                           font=LBL_FONT, command=lambda: refresh_answer_area()).pack(side=tk.LEFT, padx=8)
+
+        # Question text
+        tk.Label(editor, text="Question:", font=LBL_FONT, bg=BG, fg=SUBTEXT).pack(anchor="w", pady=(4,2))
+        q_text_entry = tk.Text(editor, bg=ENTRY_BG, fg=TEXT, insertbackground=TEXT,
+                               font=("Segoe UI",12), relief="flat", bd=6,
+                               height=3, wrap=tk.WORD)
+        q_text_entry.pack(fill=tk.X, pady=(0,10))
+
+        # Answers area
+        ans_frame = tk.Frame(editor, bg=BG)
+        ans_frame.pack(fill=tk.X)
+
+        correct_var = tk.StringVar(value="A")
+        answer_entries = {}   # label -> Entry widget
+
+        def refresh_answer_area():
+            for w in ans_frame.winfo_children(): w.destroy()
+            answer_entries.clear()
+            if q_type.get() == "multiple":
+                tk.Label(ans_frame, text="Answers (select the correct one):",
+                         font=LBL_FONT, bg=BG, fg=SUBTEXT).pack(anchor="w", pady=(0,6))
+                for opt in ["A","B","C","D"]:
+                    row = tk.Frame(ans_frame, bg=BG)
+                    row.pack(fill=tk.X, pady=3)
+                    tk.Radiobutton(row, variable=correct_var, value=opt,
+                                   bg=BG, selectcolor=SUCCESS, activebackground=BG).pack(side=tk.LEFT)
+                    tk.Label(row, text=f"{opt}:", width=3, font=("Segoe UI",11,"bold"),
+                             bg=BG, fg=ACCENT).pack(side=tk.LEFT)
+                    e = tk.Entry(row, bg=ENTRY_BG, fg=TEXT, insertbackground=TEXT,
+                                 font=LBL_FONT, relief="flat", bd=4)
+                    e.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4,0))
+                    answer_entries[opt] = e
+            else:
+                tk.Label(ans_frame, text="Select the correct answer:",
+                         font=LBL_FONT, bg=BG, fg=SUBTEXT).pack(anchor="w", pady=(0,8))
+                for opt, label in [("True","✅  True"), ("False","❌  False")]:
+                    row = tk.Frame(ans_frame, bg=BG)
+                    row.pack(anchor="w", pady=4)
+                    tk.Radiobutton(row, text=label, variable=correct_var, value=opt,
+                                   bg=BG, fg=TEXT, selectcolor=SUCCESS, activebackground=BG,
+                                   font=("Segoe UI",13)).pack(side=tk.LEFT, padx=8)
+                correct_var.set("True")
+
+        refresh_answer_area()
+
+        # Save question button
+        btn_area = tk.Frame(editor, bg=BG)
+        btn_area.pack(fill=tk.X, pady=16)
+        make_btn(btn_area, "✔  Save Question", lambda: save_current_question(), SUCCESS).pack(side=tk.LEFT)
+        make_btn(btn_area, "✖  Clear", lambda: clear_editor(), "#555").pack(side=tk.LEFT, padx=8)
+
+        status_var = tk.StringVar(value="")
+        status_lbl = tk.Label(btn_area, textvariable=status_var,
+                              font=("Segoe UI",10), bg=BG, fg=SUCCESS)
+        status_lbl.pack(side=tk.LEFT, padx=12)
+
+        # ── Logic ────────────────────────────────────────────────
+
+        def refresh_list():
+            q_listbox.delete(0, tk.END)
+            for i, q in enumerate(questions):
+                icon = "🔘" if q["type"] == "multiple" else "✅"
+                preview = q["question"][:42] + "…" if len(q["question"]) > 42 else q["question"]
+                q_listbox.insert(tk.END, f"  {i+1}. {icon} {preview}")
+
+        def clear_editor():
+            q_text_entry.delete("1.0", tk.END)
+            for e in answer_entries.values(): e.delete(0, tk.END)
+            correct_var.set("A" if q_type.get()=="multiple" else "True")
+            current_edit[0] = None
+            status_var.set("")
+
+        def load_question_into_editor(idx):
+            q = questions[idx]
+            current_edit[0] = idx
+            q_type.set(q["type"])
+            refresh_answer_area()
+            q_text_entry.delete("1.0", tk.END)
+            q_text_entry.insert("1.0", q["question"])
+            correct_var.set(q["correct"])
+            if q["type"] == "multiple":
+                for opt in ["A","B","C","D"]:
+                    answer_entries[opt].delete(0, tk.END)
+                    answer_entries[opt].insert(0, q["answers"].get(opt,""))
+            status_var.set(f"Editing question {idx+1}")
+
+        def on_list_select(evt):
+            sel = q_listbox.curselection()
+            if sel: load_question_into_editor(sel[0])
+
+        q_listbox.bind("<<ListboxSelect>>", on_list_select)
+
+        def new_question():
+            clear_editor()
+            q_type.set("multiple")
+            refresh_answer_area()
+            q_text_entry.focus_set()
+            status_var.set("New question — fill in and save")
+
+        def save_current_question():
+            text = q_text_entry.get("1.0", tk.END).strip()
+            if not text:
+                messagebox.showwarning("Missing", "Please enter a question.", parent=root)
+                return
+            qtype = q_type.get()
+            if qtype == "multiple":
+                answers = {opt: answer_entries[opt].get().strip() for opt in ["A","B","C","D"]}
+                if not all(answers.values()):
+                    messagebox.showwarning("Missing", "Please fill in all four answer options.", parent=root)
+                    return
+                correct = correct_var.get()
+            else:
+                answers = {"True": "True", "False": "False"}
+                correct = correct_var.get()
+
+            q = {"type": qtype, "question": text, "answers": answers, "correct": correct}
+            if current_edit[0] is not None:
+                questions[current_edit[0]] = q
+                status_var.set(f"✔ Question {current_edit[0]+1} updated")
+            else:
+                questions.append(q)
+                current_edit[0] = len(questions) - 1
+                status_var.set(f"✔ Question {len(questions)} added")
+            refresh_list()
+            q_listbox.selection_clear(0, tk.END)
+            q_listbox.selection_set(current_edit[0])
+
+        def delete_question():
+            sel = q_listbox.curselection()
+            if not sel:
+                messagebox.showinfo("Select", "Select a question to delete.", parent=root)
+                return
+            idx = sel[0]
+            if messagebox.askyesno("Delete", f"Delete question {idx+1}?", parent=root):
+                questions.pop(idx)
+                current_edit[0] = None
+                clear_editor()
+                refresh_list()
+                status_var.set("Question deleted")
+
+        def save_quiz():
+            if not questions:
+                messagebox.showwarning("Empty", "Add at least one question first.", parent=root)
+                return
+            path = filedialog.asksaveasfilename(
+                parent=root, defaultextension=".json",
+                filetypes=[("Quiz files","*.json"),("All files","*.*")],
+                title="Save Quiz")
+            if not path: return
+            data = {"title": title_var.get(), "questions": questions}
+            with open(path,"w",encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            status_var.set(f"✔ Saved: {os.path.basename(path)}")
+            messagebox.showinfo("Saved", f"Quiz saved to:\n{path}", parent=root)
+
+        def load_quiz():
+            path = filedialog.askopenfilename(
+                parent=root,
+                filetypes=[("Quiz files","*.json"),("All files","*.*")],
+                title="Load Quiz")
+            if not path: return
+            try:
+                with open(path,"r",encoding="utf-8") as f:
+                    data = json.load(f)
+                questions.clear()
+                questions.extend(data.get("questions",[]))
+                title_var.set(data.get("title","My Quiz"))
+                clear_editor()
+                refresh_list()
+                status_var.set(f"✔ Loaded: {os.path.basename(path)} ({len(questions)} questions)")
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not load quiz:\n{e}", parent=root)
+
+        root.mainloop()
+
+    # ── Quiz Player ──────────────────────────────────────────────────
+
+    def _launch_quiz_player(self, path, line):
+        try:
+            import tkinter as tk
+            from tkinter import filedialog, messagebox
+            import json
+        except ImportError:
+            raise RuntimeError_("Tkinter is not available.", line)
+
+        # Load quiz file
+        if path:
+            try:
+                with open(path,"r",encoding="utf-8") as f:
+                    quiz_data = json.load(f)
+            except Exception as e:
+                raise RuntimeError_(f"Could not load quiz '{path}': {e}", line)
+        else:
+            # Ask user to pick a file
+            root_tmp = tk.Tk(); root_tmp.withdraw()
+            path = filedialog.askopenfilename(
+                filetypes=[("Quiz files","*.json"),("All files","*.*")],
+                title="Open Quiz File")
+            root_tmp.destroy()
+            if not path: return
+            try:
+                with open(path,"r",encoding="utf-8") as f:
+                    quiz_data = json.load(f)
+            except Exception as e:
+                raise RuntimeError_(f"Could not load quiz: {e}", line)
+
+        questions = quiz_data.get("questions", [])
+        title     = quiz_data.get("title", "Quiz")
+        if not questions:
+            raise RuntimeError_("The quiz file has no questions.", line)
+
+        # ── Palette ──────────────────────────────────────────────
+        BG      = "#1a1a2e"
+        CARD    = "#16213e"
+        ACCENT  = "#e94560"
+        SUCCESS = "#4caf50"
+        WRONG   = "#e74c3c"
+        TEXT    = "#eaeaea"
+        SUBTEXT = "#a0a0b0"
+        YELLOW  = "#f0c040"
+
+        # ── State ────────────────────────────────────────────────
+        state = {"idx": 0, "score": 0, "answered": False,
+                 "user_answers": [], "total": len(questions)}
+
+        root = tk.Tk()
+        root.title(f"FSN Quiz — {title}")
+        root.geometry("720x540")
+        root.configure(bg=BG)
+        root.resizable(False, False)
+
+        # ── Frames ───────────────────────────────────────────────
+        # Header
+        hdr = tk.Frame(root, bg=ACCENT, padx=20, pady=12)
+        hdr.pack(fill=tk.X)
+        tk.Label(hdr, text=f"🎯  {title}", font=("Segoe UI",16,"bold"),
+                 bg=ACCENT, fg=TEXT).pack(side=tk.LEFT)
+        progress_var = tk.StringVar(value="Question 1 of " + str(state["total"]))
+        tk.Label(hdr, textvariable=progress_var, font=("Segoe UI",11),
+                 bg=ACCENT, fg=TEXT).pack(side=tk.RIGHT)
+
+        # Score bar
+        score_frame = tk.Frame(root, bg=CARD, padx=20, pady=8)
+        score_frame.pack(fill=tk.X)
+        score_var = tk.StringVar(value="Score: 0")
+        tk.Label(score_frame, textvariable=score_var, font=("Segoe UI",12,"bold"),
+                 bg=CARD, fg=YELLOW).pack(side=tk.LEFT)
+
+        # Question area
+        q_card = tk.Frame(root, bg=CARD, padx=30, pady=20)
+        q_card.pack(fill=tk.X, padx=20, pady=12)
+
+        q_num_var = tk.StringVar()
+        tk.Label(q_card, textvariable=q_num_var, font=("Segoe UI",10),
+                 bg=CARD, fg=SUBTEXT).pack(anchor="w")
+
+        q_text_var = tk.StringVar()
+        q_label = tk.Label(q_card, textvariable=q_text_var, font=("Segoe UI",14),
+                           bg=CARD, fg=TEXT, wraplength=620, justify="left", anchor="w")
+        q_label.pack(anchor="w", pady=(4,0))
+
+        # Answer buttons area
+        ans_frame = tk.Frame(root, bg=BG)
+        ans_frame.pack(fill=tk.X, padx=20, pady=4)
+
+        ans_buttons = []
+
+        # Feedback label
+        feedback_var = tk.StringVar()
+        feedback_lbl = tk.Label(root, textvariable=feedback_var,
+                                font=("Segoe UI",13,"bold"), bg=BG, fg=SUCCESS)
+        feedback_lbl.pack(pady=8)
+
+        # Next / Finish button
+        nav_frame = tk.Frame(root, bg=BG)
+        nav_frame.pack(pady=8)
+
+        def load_question():
+            # Clear old answer buttons
+            for w in ans_frame.winfo_children(): w.destroy()
+            ans_buttons.clear()
+            feedback_var.set("")
+            state["answered"] = False
+
+            idx = state["idx"]
+            q = questions[idx]
+            q_num_var.set(f"Question {idx+1} of {state['total']}")
+            q_text_var.set(q["question"])
+            progress_var.set(f"Question {idx+1} of {state['total']}")
+
+            def make_ans_btn(opt, label_text):
+                full = f"  {opt}   {label_text}" if q["type"]=="multiple" else f"  {label_text}"
+                btn = tk.Button(ans_frame, text=full, font=("Segoe UI",12),
+                                bg=CARD, fg=TEXT, relief="flat", bd=0,
+                                cursor="hand2", anchor="w", padx=16, pady=10,
+                                activebackground="#1e2d50", activeforeground=TEXT,
+                                command=lambda o=opt: answer(o))
+                btn.pack(fill=tk.X, pady=3, ipady=2)
+                ans_buttons.append((opt, btn))
+                btn.bind("<Enter>", lambda e,b=btn: b.config(bg="#1e2d50"))
+                btn.bind("<Leave>", lambda e,b=btn: b.config(bg=CARD))
+
+            if q["type"] == "multiple":
+                for opt in ["A","B","C","D"]:
+                    make_ans_btn(opt, q["answers"].get(opt,""))
+            else:
+                make_ans_btn("True", "✅  True")
+                make_ans_btn("False", "❌  False")
+
+            # Update next button visibility
+            for w in nav_frame.winfo_children(): w.destroy()
+
+        def answer(chosen):
+            if state["answered"]: return
+            state["answered"] = True
+            idx = state["idx"]
+            q = questions[idx]
+            correct = q["correct"]
+            is_correct = chosen == correct
+
+            if is_correct:
+                state["score"] += 1
+                feedback_var.set("✅  Correct!")
+                feedback_lbl.config(fg=SUCCESS)
+            else:
+                if q["type"] == "multiple":
+                    feedback_var.set(f"❌  Wrong — correct answer was {correct}: {q['answers'].get(correct,'')}")
+                else:
+                    feedback_var.set(f"❌  Wrong — correct answer was {correct}")
+                feedback_lbl.config(fg=WRONG)
+
+            state["user_answers"].append({"q": q["question"], "chosen": chosen,
+                                          "correct": correct, "ok": is_correct})
+            score_var.set(f"Score: {state['score']} / {idx+1}")
+
+            # Highlight buttons
+            for opt, btn in ans_buttons:
+                if opt == correct:
+                    btn.config(bg=SUCCESS, fg="#111", activebackground=SUCCESS)
+                elif opt == chosen and not is_correct:
+                    btn.config(bg=WRONG, fg=TEXT, activebackground=WRONG)
+
+            # Show next/finish
+            is_last = idx >= state["total"] - 1
+            label = "🏁  See Results" if is_last else "Next  ▶"
+            color = YELLOW if is_last else ACCENT
+            tk.Button(nav_frame, text=label,
+                      font=("Segoe UI",12,"bold"),
+                      bg=color, fg="#111" if is_last else TEXT,
+                      relief="flat", padx=20, pady=10, cursor="hand2",
+                      command=show_results if is_last else next_question).pack()
+
+        def next_question():
+            state["idx"] += 1
+            load_question()
+
+        def show_results():
+            # Clear everything
+            for w in root.winfo_children(): w.destroy()
+
+            score = state["score"]
+            total = state["total"]
+            pct   = round(score/total*100)
+
+            if pct >= 80:   grade,color = "Excellent! 🏆", SUCCESS
+            elif pct >= 60: grade,color = "Good Job! 👍", YELLOW
+            elif pct >= 40: grade,color = "Keep Practising 📚", "#ff9800"
+            else:           grade,color = "Better Luck Next Time 💪", WRONG
+
+            # Header
+            hdr2 = tk.Frame(root, bg=ACCENT, padx=20, pady=16)
+            hdr2.pack(fill=tk.X)
+            tk.Label(hdr2, text=f"🎯  {title} — Results",
+                     font=("Segoe UI",16,"bold"), bg=ACCENT, fg=TEXT).pack()
+
+            # Score card
+            card = tk.Frame(root, bg=CARD, padx=30, pady=20)
+            card.pack(fill=tk.X, padx=20, pady=12)
+            tk.Label(card, text=f"{score} / {total}", font=("Segoe UI",40,"bold"),
+                     bg=CARD, fg=color).pack()
+            tk.Label(card, text=f"{pct}%  —  {grade}", font=("Segoe UI",14),
+                     bg=CARD, fg=color).pack(pady=(4,0))
+
+            # Scrollable summary
+            tk.Label(root, text="Question Summary", font=("Segoe UI",12,"bold"),
+                     bg=BG, fg=SUBTEXT).pack(anchor="w", padx=24, pady=(8,2))
+
+            sum_outer = tk.Frame(root, bg=BG)
+            sum_outer.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0,8))
+            sum_scroll = tk.Scrollbar(sum_outer)
+            sum_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+            canvas = tk.Canvas(sum_outer, bg=BG, highlightthickness=0,
+                               yscrollcommand=sum_scroll.set)
+            canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            sum_scroll.config(command=canvas.yview)
+            inner = tk.Frame(canvas, bg=BG)
+            canvas.create_window((0,0), window=inner, anchor="nw")
+
+            for i, ua in enumerate(state["user_answers"]):
+                row_bg = "#1a2e1a" if ua["ok"] else "#2e1a1a"
+                row = tk.Frame(inner, bg=row_bg, padx=12, pady=8)
+                row.pack(fill=tk.X, pady=2)
+                icon = "✅" if ua["ok"] else "❌"
+                tk.Label(row, text=f"{icon}  Q{i+1}: {ua['q'][:60]}{'…' if len(ua['q'])>60 else ''}",
+                         font=("Segoe UI",10), bg=row_bg, fg=TEXT, anchor="w").pack(anchor="w")
+                if not ua["ok"]:
+                    tk.Label(row, text=f"     Your answer: {ua['chosen']}  |  Correct: {ua['correct']}",
+                             font=("Segoe UI",9), bg=row_bg, fg=SUBTEXT).pack(anchor="w")
+
+            inner.update_idletasks()
+            canvas.config(scrollregion=canvas.bbox("all"))
+
+            # Play again / close
+            btn_row = tk.Frame(root, bg=BG)
+            btn_row.pack(pady=10)
+
+            def play_again():
+                for w in root.winfo_children(): w.destroy()
+                state.update({"idx":0,"score":0,"answered":False,"user_answers":[]})
+                rebuild_ui()
+
+            def rebuild_ui():
+                nonlocal hdr, score_frame, q_card, ans_frame, feedback_lbl, nav_frame
+                hdr = tk.Frame(root, bg=ACCENT, padx=20, pady=12); hdr.pack(fill=tk.X)
+                tk.Label(hdr, text=f"🎯  {title}", font=("Segoe UI",16,"bold"), bg=ACCENT, fg=TEXT).pack(side=tk.LEFT)
+                progress_var.set(f"Question 1 of {state['total']}")
+                tk.Label(hdr, textvariable=progress_var, font=("Segoe UI",11), bg=ACCENT, fg=TEXT).pack(side=tk.RIGHT)
+                score_frame = tk.Frame(root, bg=CARD, padx=20, pady=8); score_frame.pack(fill=tk.X)
+                score_var.set("Score: 0")
+                tk.Label(score_frame, textvariable=score_var, font=("Segoe UI",12,"bold"), bg=CARD, fg=YELLOW).pack(side=tk.LEFT)
+                q_card = tk.Frame(root, bg=CARD, padx=30, pady=20); q_card.pack(fill=tk.X, padx=20, pady=12)
+                tk.Label(q_card, textvariable=q_num_var, font=("Segoe UI",10), bg=CARD, fg=SUBTEXT).pack(anchor="w")
+                tk.Label(q_card, textvariable=q_text_var, font=("Segoe UI",14), bg=CARD, fg=TEXT, wraplength=620, justify="left", anchor="w").pack(anchor="w", pady=(4,0))
+                ans_frame = tk.Frame(root, bg=BG); ans_frame.pack(fill=tk.X, padx=20, pady=4)
+                feedback_lbl = tk.Label(root, textvariable=feedback_var, font=("Segoe UI",13,"bold"), bg=BG, fg=SUCCESS); feedback_lbl.pack(pady=8)
+                nav_frame = tk.Frame(root, bg=BG); nav_frame.pack(pady=8)
+                load_question()
+
+            tk.Button(btn_row, text="🔁  Play Again", font=("Segoe UI",11,"bold"),
+                      bg=ACCENT, fg=TEXT, relief="flat", padx=16, pady=8,
+                      cursor="hand2", command=play_again).pack(side=tk.LEFT, padx=8)
+            tk.Button(btn_row, text="✖  Close", font=("Segoe UI",11),
+                      bg="#333", fg=TEXT, relief="flat", padx=16, pady=8,
+                      cursor="hand2", command=root.destroy).pack(side=tk.LEFT, padx=8)
+
+        load_question()
         root.mainloop()
 
 # ─────────────────────────────────────────────────────────────────────
