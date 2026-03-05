@@ -1,12 +1,3 @@
-#!/usr/bin/env python3
-"""
-FSN - Freeform Sentence Notation  v2.0
-A programming language where code reads like natural English.
-File extension: .fsn
-
-New in v2: math, strings, file I/O, GUI windows, date/time, random numbers
-"""
-
 import sys
 import re
 import os
